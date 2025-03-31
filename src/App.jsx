@@ -1,27 +1,63 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react'; // Make sure useEffect is imported
+import React, { useState, useEffect, useCallback } from 'react'; // Add useCallback
 import { Routes, Route, Link } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import RecipesPage from './pages/RecipesPage';
 import PlannerPage from './pages/PlannerPage';
 import './App.css';
 
-// === Logic moved from RecipesPage ===
-const RECIPES_LOCAL_STORAGE_KEY = 'myMealPlannerRecipes'; // Renamed slightly for clarity
-
-// === Add Planner Constants ===
-const PLANNER_LOCAL_STORAGE_KEY = 'myMealPlannerPlan';
+// Constants
+const RECIPES_LOCAL_STORAGE_KEY = 'myMealPlannerRecipes';
+const ALL_PLANS_LOCAL_STORAGE_KEY = 'myMealPlannerAllPlans'; // Renamed for clarity
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const MEAL_SLOTS = ["breakfast", "morningSnack", "lunch", "afternoonSnack", "dinner"];
-// === End Planner Constants ===
+const initialRecipes = [ /* ... */ ];
 
-const initialRecipes = [
-  { id: 1, name: "Spaghetti Carbonara", description: "A classic Roman pasta dish." },
-  { id: 2, name: "Chicken Curry", description: "Creamy and flavorful chicken curry." },
-  { id: 3, name: "Tofu Scramble", description: "A delicious vegan breakfast option." },
-  { id: 4, name: "Lentil Soup", description: "Hearty and healthy lentil soup." }
-];
-// === End of moved logic ===
+// --- Helper Functions ---
+
+// Get the date for the Monday of the week containing the given date
+function getMonday(d) {
+  d = new Date(d);
+  d.setHours(0, 0, 0, 0); // Normalize time
+  const day = d.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  return new Date(d.setDate(diff));
+}
+
+// Format date as YYYY-MM-DD for using as object keys
+function formatDateKey(date) {
+    const d = new Date(date);
+    const month = `${d.getMonth() + 1}`.padStart(2, '0');
+    const day = `${d.getDate()}`.padStart(2, '0');
+    const year = d.getFullYear();
+    return `${year}-${month}-${day}`;
+}
+
+// Get array of 7 Date objects starting from the given start date
+function getWeekDates(startDate) {
+  const weekDates = [];
+  const start = new Date(startDate); // Use the provided start date
+  start.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    weekDates.push(date);
+  }
+  return weekDates;
+}
+
+// Create an empty structure for a single week's plan
+const createEmptyPlan = () => {
+    return DAYS_OF_WEEK.reduce((acc, day) => {
+        acc[day] = MEAL_SLOTS.reduce((meals, slot) => {
+            meals[slot] = []; // Initialize each slot as empty array
+            return meals;
+        }, {});
+        return acc;
+    }, {});
+};
+
 
 function App() {
   // === State and handlers now live in App ===
@@ -59,99 +95,140 @@ function App() {
   };
   // === End of state and handlers ===
 
-
-  // === Meal Plan State ===
-  const [mealPlan, setMealPlan] = useState(() => {
-    // Function to create a default empty plan structure
-    const createEmptyPlan = () => {
-        return DAYS_OF_WEEK.reduce((acc, day) => {
-            acc[day] = MEAL_SLOTS.reduce((meals, slot) => {
-                meals[slot] = []; // Initialize each slot as empty array
-                return meals;
-            }, {});
-            return acc;
-        }, {});
-    };
-
+  // --- Week Navigation State ---
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState(() => getMonday(new Date()));
+  
+  // --- All Meal Plans State ---
+  const [allMealPlans, setAllMealPlans] = useState(() => {
     try {
-        const storedPlan = localStorage.getItem(PLANNER_LOCAL_STORAGE_KEY);
-        // Parse stored plan if it exists, otherwise create a new empty one
-        return storedPlan ? JSON.parse(storedPlan) : createEmptyPlan();
+      const storedPlans = localStorage.getItem(ALL_PLANS_LOCAL_STORAGE_KEY);
+      return storedPlans ? JSON.parse(storedPlans) : {}; // Default to empty object
     } catch (error) {
-        console.error("Error parsing meal plan from localStorage", error);
-        // Fallback to an empty plan on error
-        return createEmptyPlan();
+      console.error("Error parsing all meal plans from localStorage", error);
+      return {};
     }
   });
 
-  // Effect to save mealPlan to localStorage whenever it changes
+  // Effect to save allMealPlans to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(PLANNER_LOCAL_STORAGE_KEY, JSON.stringify(mealPlan));
+      localStorage.setItem(ALL_PLANS_LOCAL_STORAGE_KEY, JSON.stringify(allMealPlans));
     } catch (error) {
-      console.error("Error saving meal plan to localStorage", error);
+      console.error("Error saving all meal plans to localStorage", error);
     }
-  }, [mealPlan]); // Dependency array ensures this runs only when mealPlan changes
+  }, [allMealPlans]);
 
-     // === UPDATED Meal Plan Handlers ===
+  // --- Get Derived State for the Current Week ---
+  const currentWeekKey = formatDateKey(currentWeekStartDate);
+  const currentWeekDates = getWeekDates(currentWeekStartDate);
+  // Get the plan for the current week, or create an empty one if it doesn't exist
+  const currentMealPlan = allMealPlans[currentWeekKey] || createEmptyPlan();
 
-    // Add a Recipe from the list
-    const handleAddRecipeToMeal = (day, slot, recipe) => {
-      if (!recipe) return;
-      console.log(`Adding RECIPE ${recipe.name} to ${day} ${slot}`);
-      setMealPlan(prevPlan => {
-          const newPlan = JSON.parse(JSON.stringify(prevPlan));
-          if (!Array.isArray(newPlan[day][slot])) { newPlan[day][slot] = []; } // Ensure array exists
 
-          // Check if recipe already exists
-          const recipeExists = newPlan[day][slot].some(item => item.type === 'recipe' && item.recipeId === recipe.id);
+  // --- Week Navigation Handlers ---
+  const goToNextWeek = useCallback(() => {
+    setCurrentWeekStartDate(prevDate => {
+      const nextWeek = new Date(prevDate);
+      nextWeek.setDate(prevDate.getDate() + 7);
+      return nextWeek;
+    });
+  }, []);
 
-          if (!recipeExists) {
-              newPlan[day][slot].push({
-                  type: 'recipe',         // <-- Add type
-                  id: `recipe-${recipe.id}`, // Unique ID for React key (can be simple for recipes)
-                  recipeId: recipe.id,
-                  recipeName: recipe.name
-              });
-          } else {
-              console.log(`Recipe ${recipe.name} already in ${day} ${slot}`);
-          }
-          return newPlan;
+  const goToPreviousWeek = useCallback(() => {
+    setCurrentWeekStartDate(prevDate => {
+      const prevWeek = new Date(prevDate);
+      prevWeek.setDate(prevDate.getDate() - 7);
+      return prevWeek;
+    });
+  }, []);
+
+  const goToCurrentWeek = useCallback(() => {
+      const todayMonday = getMonday(new Date());
+      // Only update state if it's actually different to avoid unnecessary re-renders
+      if (formatDateKey(todayMonday) !== formatDateKey(currentWeekStartDate)) {
+          setCurrentWeekStartDate(todayMonday);
+      }
+  }, [currentWeekStartDate]); // Re-create if currentWeekStartDate changes relative to today
+
+
+  // --- UPDATED Meal Plan Modification Handlers ---
+  // Now operate on the allMealPlans state using currentWeekKey
+
+  const handleAddRecipeToMeal = useCallback((day, slot, recipe) => {
+    if (!recipe) return;
+    const weekKey = currentWeekKey; // Use the key from derived state
+    console.log(`Adding RECIPE ${recipe.name} to ${day} ${slot} for week ${weekKey}`);
+
+    setAllMealPlans(prevPlans => {
+      const newPlans = { ...prevPlans }; // Shallow copy top level
+      // Ensure the week exists, create if not
+      if (!newPlans[weekKey]) {
+          newPlans[weekKey] = createEmptyPlan();
+      }
+      // Deep copy the specific week plan before modifying
+      const weekPlan = JSON.parse(JSON.stringify(newPlans[weekKey]));
+
+      if (!Array.isArray(weekPlan[day]?.[slot])) { weekPlan[day][slot] = []; }
+
+      const recipeExists = weekPlan[day][slot].some(item => item.type === 'recipe' && item.recipeId === recipe.id);
+
+      if (!recipeExists) {
+        weekPlan[day][slot].push({
+            type: 'recipe',
+            id: `recipe-${recipe.id}-${Date.now()}`, // Add timestamp for potential duplication across slots/days
+            recipeId: recipe.id,
+            recipeName: recipe.name
+        });
+        newPlans[weekKey] = weekPlan; // Put the modified week plan back
+        return newPlans;
+      } else {
+          console.log(`Recipe ${recipe.name} already in ${day} ${slot}`);
+          return prevPlans; // No change needed
+      }
+    });
+  }, [currentWeekKey]); // Depend on currentWeekKey
+
+  const handleAddCustomItemToMeal = useCallback((day, slot, text) => {
+    if (!text || !text.trim()) return;
+    const trimmedText = text.trim();
+    const weekKey = currentWeekKey;
+    console.log(`Adding CUSTOM TEXT "${trimmedText}" to ${day} ${slot} for week ${weekKey}`);
+
+    setAllMealPlans(prevPlans => {
+      const newPlans = { ...prevPlans };
+      if (!newPlans[weekKey]) {
+          newPlans[weekKey] = createEmptyPlan();
+      }
+      const weekPlan = JSON.parse(JSON.stringify(newPlans[weekKey]));
+
+      if (!Array.isArray(weekPlan[day]?.[slot])) { weekPlan[day][slot] = []; }
+
+      weekPlan[day][slot].push({
+        type: 'custom',
+        id: `custom-${Date.now()}`,
+        text: trimmedText
       });
-  };
+      newPlans[weekKey] = weekPlan;
+      return newPlans;
+    });
+  }, [currentWeekKey]);
 
-  // Add a Custom Text Item
-  const handleAddCustomItemToMeal = (day, slot, text) => {
-      if (!text || !text.trim()) return; // Don't add empty text
-      const trimmedText = text.trim();
-      console.log(`Adding CUSTOM TEXT "${trimmedText}" to ${day} ${slot}`);
-      setMealPlan(prevPlan => {
-          const newPlan = JSON.parse(JSON.stringify(prevPlan));
-          if (!Array.isArray(newPlan[day][slot])) { newPlan[day][slot] = []; } // Ensure array exists
+  const handleRemoveItemFromMeal = useCallback((day, slot, itemIdToRemove) => {
+    const weekKey = currentWeekKey;
+    console.log(`Removing item ID ${itemIdToRemove} from ${day} ${slot} for week ${weekKey}`);
 
-          newPlan[day][slot].push({
-              type: 'custom',         // <-- Add type
-              id: `custom-${Date.now()}`, // Unique ID for custom items
-              text: trimmedText
-          });
-          return newPlan;
-      });
-  };
-
-
-  // Remove an Item (Recipe or Custom) using its unique 'id'
-  const handleRemoveItemFromMeal = (day, slot, itemIdToRemove) => {
-       console.log(`Removing item ID ${itemIdToRemove} from ${day} ${slot}`);
-       setMealPlan(prevPlan => {
-          const newPlan = JSON.parse(JSON.stringify(prevPlan));
-          if (Array.isArray(newPlan[day][slot])) {
-              // Filter out the item with the matching 'id'
-              newPlan[day][slot] = newPlan[day][slot].filter(item => item.id !== itemIdToRemove);
-          }
-          return newPlan;
-      });
-  };
-  // === End of UPDATED Meal Plan Handlers ===
+    setAllMealPlans(prevPlans => {
+        const newPlans = { ...prevPlans };
+        // Only proceed if the week and slot actually exist and have data
+        if (newPlans[weekKey] && Array.isArray(newPlans[weekKey][day]?.[slot])) {
+            const weekPlan = JSON.parse(JSON.stringify(newPlans[weekKey]));
+            weekPlan[day][slot] = weekPlan[day][slot].filter(item => item.id !== itemIdToRemove);
+            newPlans[weekKey] = weekPlan;
+            return newPlans;
+        }
+        return prevPlans; // No change if week/slot/item doesn't exist
+    });
+  }, [currentWeekKey]);
 
   return (
     <div className="App">
@@ -165,35 +242,54 @@ function App() {
 
       <main>
         <Routes>
-          <Route path="/" element={<HomePage />} /> {/* Will pass mealPlan later */}
-          {/* Pass recipes state and handlers down to RecipesPage */}
+          <Route
+            path="/"
+            element={
+              <HomePage
+                // Pass data for the *current* view week
+                mealPlan={currentMealPlan}
+                daysOfWeek={DAYS_OF_WEEK}
+                mealSlots={MEAL_SLOTS}
+                weekDates={currentWeekDates}
+                // Pass navigation handlers
+                onNextWeek={goToNextWeek}
+                onPreviousWeek={goToPreviousWeek}
+                onGoToCurrent={goToCurrentWeek}
+                currentWeekStartDate={currentWeekStartDate} // Pass start date for display
+              />
+            }
+          />
           <Route
             path="/recipes"
             element={
               <RecipesPage
                 recipes={recipes}
-                onAddRecipe={handleAddRecipe} // Pass add handler
-                onDeleteRecipe={handleDeleteRecipe} // Pass delete handler
+                onAddRecipe={handleAddRecipe}
+                onDeleteRecipe={handleDeleteRecipe}
               />
             }
           />
-
-          {/* PlannerPage receives its props */}
           <Route
             path="/planner"
             element={
               <PlannerPage
-                recipes={recipes}
-                mealPlan={mealPlan}
-                // Pass down the updated/new handlers
-                onAddRecipeToMeal={handleAddRecipeToMeal}
-                onAddCustomItemToMeal={handleAddCustomItemToMeal} // New handler
-                onRemoveItemFromMeal={handleRemoveItemFromMeal} // Renamed/updated handler
-                // Pass constants
+                recipes={recipes} // Needed for dropdown
+                 // Pass data for the *current* view week
+                mealPlan={currentMealPlan}
                 daysOfWeek={DAYS_OF_WEEK}
                 mealSlots={MEAL_SLOTS}
-              /> 
-            } 
+                weekDates={currentWeekDates}
+                // Pass modification handlers (already depend on correct week via useCallback)
+                onAddRecipeToMeal={handleAddRecipeToMeal}
+                onAddCustomItemToMeal={handleAddCustomItemToMeal}
+                onRemoveItemFromMeal={handleRemoveItemFromMeal}
+                 // Pass navigation handlers
+                onNextWeek={goToNextWeek}
+                onPreviousWeek={goToPreviousWeek}
+                onGoToCurrent={goToCurrentWeek}
+                currentWeekStartDate={currentWeekStartDate} // Pass start date for display
+              />
+            }
           />
         </Routes>
       </main>
