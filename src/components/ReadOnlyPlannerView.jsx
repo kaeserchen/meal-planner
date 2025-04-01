@@ -13,51 +13,58 @@ const formatDate = (date) => {
 function ReadOnlyPlannerView({ mealPlan, daysOfWeek, mealSlots, weekDates }) {
 
     return (
-        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', border: '1px solid #eee', padding: '10px', borderRadius: '5px' }}>
+        // Planner Grid - Using CSS Grid for Layout
+        <div className="grid grid-cols-7 gap-2 md:gap-3">
             {daysOfWeek.map((day, index) => {
                 const date = weekDates[index];
                 const formattedDate = formatDate(date);
 
                 return (
-                    // Use day for the key as before
-                    <div key={day} style={{ border: '1px solid #ccc', padding: '10px', minWidth: '200px', flexShrink: 0 }}> {/* Slightly smaller minWidth? */}
-                        <h3>
-                            {day}
-                            {formattedDate && <div style={{ fontSize: '0.8em', fontWeight: 'normal', color: '#555' }}>({formattedDate})</div>}
-                        </h3>
+                    // Day Column
+                    <div key={day} className="bg-white rounded-lg shadow border border-gray-200 p-3">
+                        {/* Day Header */}
+                        <div className="text-center mb-2 pb-1 border-b border-gray-100">
+                            <h3 className="text-base md:text-lg font-semibold text-gray-800">{day}</h3>
+                            {formattedDate && <p className="text-xs text-gray-500">({formattedDate})</p>}
+                        </div>
 
-                        {mealSlots.map(slot => {
-                            // Safely access planned items, default to empty array if undefined
-                            const plannedItems = mealPlan?.[day]?.[slot] ?? [];
+                        {/* Meal Slots Container */}
+                        <div className="space-y-3">
+                            {mealSlots.map(slot => {
+                                const plannedItems = mealPlan?.[day]?.[slot] ?? [];
 
-                            return (
-                                <div key={slot} style={{ borderTop: '1px dashed #eee', marginTop: '10px', paddingTop: '10px', minHeight: '80px' /* Adjust as needed */ }}>
-                                    <strong>{slot.charAt(0).toUpperCase() + slot.slice(1).replace(/([A-Z])/g, ' $1').trim()}:</strong>
-                                    <div>
-                                        {/* List of planned items - READ ONLY */}
-                                        <ul style={{ listStyle: 'disc', paddingLeft: '20px', margin: '5px 0' }}> {/* Use standard list style */}
+                                return (
+                                    // Slot Section
+                                    <div key={slot} className="border-t border-gray-100 pt-2">
+                                        {/* Slot Title */}
+                                        <strong className="text-xs md:text-sm font-medium text-indigo-700 block mb-1.5">{slot.charAt(0).toUpperCase() + slot.slice(1).replace(/([A-Z])/g, ' $1').trim()}:</strong>
+
+                                        {/* List of planned items */}
+                                        <ul className="space-y-1">
                                             {plannedItems.length > 0 ? (
                                                 plannedItems.map(item => (
-                                                    // Use item.id as key
-                                                    <li key={item.id} style={{ marginBottom: '3px' }}>
-                                                        {/* Display based on type */}
-                                                        <span>{item.type === 'recipe' ? item.recipeName : item.text}</span>
-                                                        {/* NO REMOVE BUTTON */}
+                                                    // Item
+                                                    <li key={item.id} className="text-xs md:text-sm text-gray-700 p-0.5">
+                                                        {/* Remove truncate, min-w-0, block. Let text wrap naturally */}
+                                                        <span>
+                                                            {item.type === 'recipe' ? item.recipeName : item.text}
+                                                        </span>
                                                     </li>
                                                 ))
                                             ) : (
-                                                <li style={{ fontStyle: 'italic', color: '#777', listStyle: 'none', paddingLeft: 0 }}>Empty</li>
+                                                // Empty State
+                                                <li className="text-xs text-gray-400 italic px-0.5">Empty</li>
                                             )}
                                         </ul>
-                                        {/* NO INPUT SECTION (dropdown, text input, add button) */}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                        {/* NO INPUT SECTION HERE */}
+                                    </div> // End Slot Section
+                                );
+                            })}
+                        </div> {/* End Meal Slots Container */}
+                    </div> // End Day Column
                 );
             })}
-        </div>
+        </div> // End Planner Grid
     );
 }
 
