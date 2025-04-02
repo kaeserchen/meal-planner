@@ -28,7 +28,7 @@ function RecipeItem({ recipe, onDelete, onEdit, onView }) {
       {/* Content Area - Allow scrolling if content overflows */}
       <div className="p-4 sm:p-5 flex-grow"> {/* Add padding here, make scrollable */}
         {/* Recipe Name */}
-        <h3 className="text-lg font-semibold text-gray-800 mb-3 break-words" title={name}>
+        <h3 className="text-lg font-semibold text-gray-800 mb-3 break-words line-clamp-2" title={name}>
           {name}
         </h3>
 

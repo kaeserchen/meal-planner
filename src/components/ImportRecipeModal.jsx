@@ -29,21 +29,18 @@ function ImportRecipeModal({ isOpen, onClose, onImport, loading, error }) {
             {/* Modal Content */}
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col animate-modal-scale-in">
 
-                {/* Header */}
-                <div className="flex items-start justify-between p-4 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-900">
+               {/* Header */}
+               <div className="flex items-start px-4 py-3 border-b border-gray-200">
+                    <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap">
                         Import Recipe from URL
                     </h2>
-                    <button type="button" onClick={onClose} className="...">
-                        <CloseIcon />
-                    </button>
-                </div>
+                </div> 
 
                 {/* Body */}
                 <form onSubmit={handleSubmit}>
-                    <div className="p-6 space-y-4">
+                    <div className="px-6 pt-4 pb-6 space-y-4">
                         <p className="text-sm text-gray-600">
-                            Paste the URL of a recipe page below. This works best with sites using standard recipe formats (JSON-LD).
+                            Paste the URL of a recipe page below.
                         </p>
                         <div>
                             <label htmlFor="import-url" className="sr-only">Recipe URL</label>
@@ -76,7 +73,7 @@ function ImportRecipeModal({ isOpen, onClose, onImport, loading, error }) {
                     </div>
 
                     {/* Footer */}
-                    <div className="flex items-center justify-end p-4 border-t border-gray-200 space-x-2">
+                    <div className="flex items-center justify-end px-4 py-3 border-t border-gray-200 space-x-2">
                         <button
                             type="button"
                             onClick={onClose}
