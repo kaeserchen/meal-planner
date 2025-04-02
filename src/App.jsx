@@ -78,19 +78,31 @@ function App() {
     }
   }, [recipes]);
 
-  const handleAddRecipe = (newRecipeData) => { // Parameter changed slightly
+  const handleAddRecipe = (newRecipeData) => {
+    console.log("Adding recipe data:", newRecipeData); // Good for debugging
     const newRecipe = {
-      id: Date.now(),
+      id: Date.now(), // Simple unique ID generation
       name: newRecipeData.name,
-      description: newRecipeData.description,
+      // *** Use ingredients and instructions ***
+      ingredients: newRecipeData.ingredients || '', // Default to empty string if undefined
+      instructions: newRecipeData.instructions || '', // Default to empty string if undefined
     };
     setRecipes(prevRecipes => [...prevRecipes, newRecipe]);
   };
 
   const handleDeleteRecipe = (idToDelete) => {
-    if (window.confirm("Are you sure you want to delete this recipe?")) {
-      setRecipes(prevRecipes => prevRecipes.filter(recipe => recipe.id !== idToDelete));
-    }
+    setRecipes(prevRecipes => prevRecipes.filter(recipe => recipe.id !== idToDelete));
+  };
+
+  // *** NEW: UPDATE Recipe Handler ***
+  const handleUpdateRecipe = (recipeId, updatedData) => {
+    setRecipes(prevRecipes =>
+      prevRecipes.map(recipe =>
+        recipe.id === recipeId
+          ? { ...recipe, ...updatedData } // Merge existing recipe with updated fields
+          : recipe
+      )
+    );
   };
   // === End of state and handlers ===
 
@@ -309,6 +321,7 @@ function App() {
                 recipes={recipes}
                 onAddRecipe={handleAddRecipe}
                 onDeleteRecipe={handleDeleteRecipe}
+                onUpdateRecipe={handleUpdateRecipe}
               />
             }
           />
